@@ -94,6 +94,7 @@ const std::string Server::waitForAngles()
 {
 	ssize_t bytes_received;
 	char rx_buff[1024];
+	memset( &rx_buff, 0, sizeof( rx_buff ) );
 
 	bytes_received = recv( active_sock_fd, &rx_buff, sizeof( rx_buff ), 0 );
 	if( bytes_received == 0 )
