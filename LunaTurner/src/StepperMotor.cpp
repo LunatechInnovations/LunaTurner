@@ -34,7 +34,7 @@ void StepperMotor::step( const int nSteps, const Directions dir )
 	else
 		outpDir_->setValue( false );
 
-	constexpr int max_speed = 600;								//Puls/sec
+	constexpr int max_speed = 400;								//Puls/sec
 	const int acc_pulses = 25 > nSteps / 2 ? nSteps / 2 : 20;	//Number of pulses in acceleration
 	const std::chrono::milliseconds acc_time( 1 );				//Number of milliseconds to increase/decrease delay time every cycle
 	const std::chrono::milliseconds min_delay( 1000 / max_speed );

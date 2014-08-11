@@ -6,7 +6,7 @@
 #include <thread>
 #include "Angles.h"
 #include <cmath>
-#include "Server.h"
+#include "TCPServer.h"
 
 #define SMALL_WHEEL 30.56f
 #define LARGE_WHEEL 68.75f
@@ -21,62 +21,106 @@ void waitForInput( GPIOPin *input, const bool status )
 
 int main( int argc, char **argv )
 {
-	GPIOPin *outpDir = GPIO::Instance()->getPin( 18 );
-	GPIOPin *outpPulse = GPIO::Instance()->getPin( 15 );
-	GPIOPin *outpEnable = GPIO::Instance()->getPin( 14 );
-	StepperMotor motor( outpDir, outpPulse, outpEnable );
-
-//	GPIOPin *outpPLC = GPIO::Instance()->getPin( 23 );
-	GPIOPin *inpPLC = GPIO::Instance()->getPin( 24 );
-	inpPLC->setupInput();
-
-	cout << "Enabling motor.\n";
-	motor.enable();
-
-	cout << "Starting server\n";
-	Server server{ 2345 };
-
-	while( true )
+	try
 	{
-		cout << "Waiting for connection.\n";
+		GPIOPin *outpDir = GPIO::Instance()->getPin( 18 );
+		GPIOPin *outpPulse = GPIO::Instance()->getPin( 15 );
+		GPIOPin *outpEnable = GPIO::Instance()->getPin( 14 );
+		StepperMotor motor( outpDir, outpPulse, outpEnable );
 
-		if( !server.waitForConnection() )
+		GPIOPin *outpPLC = GPIO::Instance()->getPin( 23 );
+		outpPLC->setupOutput();
+		GPIOPin *inpPLC = GPIO::Instance()->getPin( 24 );
+		inpPLC->setupInput();
+
+		cout << "Enabling motor.\n";
+		motor.enable();
+
+		cout << "Starting server\n";
+		TCPServer server;
+		server.start( 2345 );
+
+		while( true )
 		{
-			cout << "Connection failed.\n";
-			continue;
-		}
+			string msg;
 
-		cout << "Waiting for angles.\n";
-		string msg = server.waitForAngles();
-		cout << "size: " << msg.size() << endl;
-		if( msg.empty() )
-			continue;
+			try
+			{
+				cout << "Waiting for connection.\n";
+				server.waitForClientConnection();
 
-		Angles a{ Angles::fromString( msg ) };
-		vector<double> list = a.angles();
+				cout << "Waiting for angles\n";
+				msg = server.waitForStringRead();
+				cout << "Received " << msg.size() << "bytes.\n";
 
-		double current_angle = 0.0f;
-		int total_steps = 0;
+				if( msg.empty() )
+					continue;
+			}
+			catch( const TCPServer::RecvTimeoutError & )
+			{
+				cout << "Recv timeout...\n";
+				continue;
+			}
+			catch( const TCPServer::ClientDisconnectedError & )
+			{
+				cout << "Client disconnected...\n";
+				continue;
+			}
+			catch( const TCPServer::AcceptTimeoutError & )
+			{
+				cout << "Accept timeout...\n";
+				continue;
+			}
 
-		for( const auto i : list )
-		{
-			cout << "Turning\n";
+			Angles a{ Angles::fromString( msg ) };
+			vector<double> list = a.angles();
+
+			double current_angle = 0.0f;
+			int total_steps = 0;
+
+			for( const auto i : list )
+			{
+				cout << "Turning\n";
+				waitForInput( inpPLC, false );
+
+				double nSteps = ((i - current_angle) / (360.0f / 400.0f)) * (LARGE_WHEEL / SMALL_WHEEL);
+
+				motor.step( (int)(round( nSteps )), StepperMotor::Directions::Cw );
+
+				current_angle = i;
+				total_steps += round( nSteps );
+
+				waitForInput( inpPLC, true );
+			}
 			waitForInput( inpPLC, false );
 
-			double nSteps = ((i - current_angle) / (360.0f / 400.0f)) * (LARGE_WHEEL / SMALL_WHEEL);
-
-			motor.step( (int)(round( nSteps )), StepperMotor::Directions::Cw );
-
-			current_angle = i;
-			total_steps += round( nSteps );
+			motor.step( (int)(round( total_steps )), StepperMotor::Directions::Ccw );
 
 			waitForInput( inpPLC, true );
 		}
-		waitForInput( inpPLC, false );
+	}
+	catch( const TCPServer::ServerError &e )
+	{
+		switch( e )
+		{
+			case TCPServer::ServerError::Accept:
+				cerr << "Server: Accept error.\n";
+				break;
+			case TCPServer::ServerError::Bind:
+				cerr << "Server: Bind error.\n";
+				break;
+			case TCPServer::ServerError::Listen:
+				cerr << "Server: Listen error.\n";
+				break;
+			case TCPServer::ServerError::Socket:
+				cerr << "Server: Socket error.\n";
+				break;
+			default:
+				cerr << "Unknown server error.\n";
+				break;
+		}
 
-		motor.step( (int)(round( total_steps )), StepperMotor::Directions::Ccw );
-
-		waitForInput( inpPLC, true );
+		return -1;
 	}
 
 	return 1;

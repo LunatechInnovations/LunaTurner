@@ -4,7 +4,7 @@ pi:	CC = g++-4.7
 CFLAGS	= -Wall -O -std=c++11 $(DEFINES)
 LDFLAGS = -lpthread
 DEFINES = -D_GLIBCXX_USE_NANOSLEEP=1
-ALLOBJS = main.o AbstractCyclicThread.o GPIOPin.o GPIO.o StepperMotor.o Angles.o Server.o
+ALLOBJS = main.o AbstractCyclicThread.o GPIOPin.o GPIO.o StepperMotor.o Angles.o TCPServer.o
 TARGET = LunaTurner
 
 doc:
@@ -35,5 +35,5 @@ StepperMotor.o : src/StepperMotor.cpp
 Angles.o : src/Angles.cpp
 	$(CC) -c src/Angles.cpp $(CFLAGS)
 	
-Server.o : src/Server.cpp
-	$(CC) -c src/Server.cpp $(CFLAGS)
+TCPServer.o : src/TCPServer.cpp
+	$(CC) -c src/TCPServer.cpp $(CFLAGS)
